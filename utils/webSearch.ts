@@ -38,18 +38,22 @@ async function makeRequest(
 ): Promise<string> {
   const retries = options.retries || 2;
   let lastError: Error | null = null;
-  
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const response = await fetch(url, {
-        method: options.method || 'GET',
+        method: options.method || "GET",
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          ...(options.headers || {})
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.5",
+          ...(options.headers || {}),
         },
-        signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
+        signal: options.timeout
+          ? AbortSignal.timeout(options.timeout)
+          : undefined,
       });
 
       if (!response.ok) {
@@ -59,31 +63,31 @@ async function makeRequest(
       return response.text();
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      
+
       // Don't retry if it's an aborted request or timeout
-      if (error instanceof DOMException && error.name === 'AbortError') {
+      if (error instanceof DOMException && error.name === "AbortError") {
         break;
       }
-      
+
       // Only retry if we have attempts left
       if (attempt === retries) {
         break;
       }
-      
+
       // Wait before retry (exponential backoff)
-      await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** attempt));
+      await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** attempt));
     }
   }
-  
-  throw lastError || new Error('Request failed');
+
+  throw lastError || new Error("Request failed");
 }
 
 /**
  * Cleans HTML entities and tags from text
  */
 function cleanHTML(text: string): string {
-  if (!text) return '';
-  
+  if (!text) return "";
+
   // Basic HTML entity decoding
   let decodedText = text
     .replace(/&amp;/g, "&")
@@ -96,7 +100,7 @@ function cleanHTML(text: string): string {
 
   // Remove HTML tags
   decodedText = decodedText.replace(/<[^>]+>/g, "");
-  
+
   // Normalize whitespace
   decodedText = decodedText.replace(/\s+/g, " ").trim();
 
@@ -111,13 +115,17 @@ function extractDDGResults(html: string): SearchResult[] {
   const results: SearchResult[] = [];
 
   // Find the results div
-  const resultsMatch = html.match(/<div class="serp__results">(.*?)<div class="(nav-link|feedback-btn)"/s);
+  const resultsMatch = html.match(
+    /<div class="serp__results">(.*?)<div class="(nav-link|feedback-btn)"/s,
+  );
   if (!resultsMatch) return results;
 
   const resultsHtml = resultsMatch[1];
 
   // Find all result blocks
-  const resultBlocks = resultsHtml.match(/<div class="result results_links results_links_deep web-result[^>]*>(.*?)<div class="clear"><\/div>/gs);
+  const resultBlocks = resultsHtml.match(
+    /<div class="result results_links results_links_deep web-result[^>]*>(.*?)<div class="clear"><\/div>/gs,
+  );
   if (!resultBlocks) return results;
 
   // Process results (increased from 3 to 10 for more comprehensive results)
@@ -126,17 +134,27 @@ function extractDDGResults(html: string): SearchResult[] {
 
     try {
       // Extract components using more reliable selectors
-      const titleMatch = block.match(/<a rel="nofollow" class="result__a"[^>]*>(.*?)<\/a>/s);
-      const urlMatch = block.match(/href="\/\/duckduckgo\.com\/l\/\?uddg=(.*?)(?:&|")/);
-      const displayUrlMatch = block.match(/<a class="result__url"[^>]*>(.*?)<\/a>/s);
-      const snippetMatch = block.match(/<a class="result__snippet"[^>]*>(.*?)<\/a>/s);
+      const titleMatch = block.match(
+        /<a rel="nofollow" class="result__a"[^>]*>(.*?)<\/a>/s,
+      );
+      const urlMatch = block.match(
+        /href="\/\/duckduckgo\.com\/l\/\?uddg=(.*?)(?:&|")/,
+      );
+      const displayUrlMatch = block.match(
+        /<a class="result__url"[^>]*>(.*?)<\/a>/s,
+      );
+      const snippetMatch = block.match(
+        /<a class="result__snippet"[^>]*>(.*?)<\/a>/s,
+      );
 
       if (titleMatch && urlMatch) {
         results.push({
           title: cleanHTML(titleMatch[1]),
           url: decodeURIComponent(urlMatch[1]),
-          displayUrl: displayUrlMatch ? cleanHTML(displayUrlMatch[1]) : new URL(decodeURIComponent(urlMatch[1])).hostname,
-          snippet: snippetMatch ? cleanHTML(snippetMatch[1]) : ""
+          displayUrl: displayUrlMatch
+            ? cleanHTML(displayUrlMatch[1])
+            : new URL(decodeURIComponent(urlMatch[1])).hostname,
+          snippet: snippetMatch ? cleanHTML(snippetMatch[1]) : "",
         });
       }
     } catch (error) {
@@ -156,9 +174,9 @@ async function searchDuckDuckGo(query: string): Promise<SearchResponse> {
     const encodedQuery = encodeURIComponent(query);
     const searchUrl = `https://html.duckduckgo.com/html/?q=${encodedQuery}`;
 
-    const html = await makeRequest(searchUrl, { 
+    const html = await makeRequest(searchUrl, {
       timeout: 10000,
-      retries: 2
+      retries: 2,
     });
     const results = extractDDGResults(html);
 
@@ -168,20 +186,20 @@ async function searchDuckDuckGo(query: string): Promise<SearchResponse> {
       if (alternativeResults.length > 0) {
         return {
           query,
-          results: alternativeResults
+          results: alternativeResults,
         };
       }
-      
+
       return {
         query,
         results: [],
-        error: "No results found or couldn't parse results"
+        error: "No results found or couldn't parse results",
       };
     }
 
     return {
       query,
-      results
+      results,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -189,7 +207,7 @@ async function searchDuckDuckGo(query: string): Promise<SearchResponse> {
     return {
       query,
       error: errorMessage,
-      results: []
+      results: [],
     };
   }
 }
@@ -199,31 +217,37 @@ async function searchDuckDuckGo(query: string): Promise<SearchResponse> {
  */
 function extractDDGResultsAlternative(html: string): SearchResult[] {
   const results: SearchResult[] = [];
-  
+
   try {
     // Try to find result blocks with a more general approach
-    const links = html.match(/<h2 class="result__title">.*?<a rel="nofollow" class="result__a".*?href=".*?uddg=(.*?)(?:&|").*?>(.*?)<\/a>.*?<a class="result__snippet".*?>(.*?)<\/a>/gs);
-    
+    const links = html.match(
+      /<h2 class="result__title">.*?<a rel="nofollow" class="result__a".*?href=".*?uddg=(.*?)(?:&|").*?>(.*?)<\/a>.*?<a class="result__snippet".*?>(.*?)<\/a>/gs,
+    );
+
     if (!links) return results;
-    
+
     for (const link of links) {
-      const titleMatch = link.match(/<a rel="nofollow" class="result__a".*?>(.*?)<\/a>/s);
+      const titleMatch = link.match(
+        /<a rel="nofollow" class="result__a".*?>(.*?)<\/a>/s,
+      );
       const urlMatch = link.match(/href=".*?uddg=(.*?)(?:&|")/);
-      const snippetMatch = link.match(/<a class="result__snippet".*?>(.*?)<\/a>/s);
-      
+      const snippetMatch = link.match(
+        /<a class="result__snippet".*?>(.*?)<\/a>/s,
+      );
+
       if (titleMatch && urlMatch) {
         results.push({
           title: cleanHTML(titleMatch[1]),
           url: decodeURIComponent(urlMatch[1]),
           displayUrl: new URL(decodeURIComponent(urlMatch[1])).hostname,
-          snippet: snippetMatch ? cleanHTML(snippetMatch[1]) : ""
+          snippet: snippetMatch ? cleanHTML(snippetMatch[1]) : "",
         });
       }
     }
   } catch (error) {
     console.error("Alternative extraction failed:", error);
   }
-  
+
   return results;
 }
 
@@ -231,8 +255,8 @@ function extractDDGResultsAlternative(html: string): SearchResult[] {
  * Extracts main content from HTML with improved detection of main content area
  */
 function extractMainContent(content: string): string {
-  if (!content) return '';
-  
+  if (!content) return "";
+
   try {
     // Remove common non-content elements
     const cleanedContent = content
@@ -254,8 +278,8 @@ function extractMainContent(content: string): string {
       /<body\b[^<]*(?:(?!<\/body>)<[^<]*)*<\/body>/gi,
     ];
 
-    let mainContent = '';
-    
+    let mainContent = "";
+
     // Try each selector in order of priority
     for (const selector of contentSelectors) {
       const matches = cleanedContent.match(selector);
@@ -265,7 +289,7 @@ function extractMainContent(content: string): string {
         break;
       }
     }
-    
+
     // If no content found, use the whole HTML as fallback
     if (!mainContent) {
       mainContent = cleanedContent;
@@ -295,22 +319,23 @@ async function fetchPageContent(
 ): Promise<{ url: string; content: string | null; error?: string }> {
   try {
     // Set a shorter timeout for content requests
-    const html = await makeRequest(url, { 
+    const html = await makeRequest(url, {
       timeout: 15000,
       retries: 1,
       headers: {
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      }
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
     });
-    
-    let content = '';
+
+    let content = "";
     try {
       content = extractMainContent(html);
     } catch (contentError) {
       return {
         url,
         content: null,
-        error: `Error extracting content: ${contentError instanceof Error ? contentError.message : String(contentError)}`
+        error: `Error extracting content: ${contentError instanceof Error ? contentError.message : String(contentError)}`,
       };
     }
 
@@ -352,28 +377,28 @@ export async function webSearch(query: string): Promise<ContentResponse> {
 
     // Step 2: Fetch content for each result (limit to 5 results to improve performance)
     const resultsToProcess = searchResults.results.slice(0, 5);
-    
+
     // Use Promise.allSettled to ensure all requests complete, even if some fail
     const settledPromises = await Promise.allSettled(
-      resultsToProcess.map(result => fetchPageContent(result.url))
+      resultsToProcess.map((result) => fetchPageContent(result.url)),
     );
 
     // Process results
     const fullResults = resultsToProcess.map((result, index) => {
       const promise = settledPromises[index];
-      
+
       if (promise.status === "fulfilled") {
         return {
           ...result,
           content: promise.value.content,
-          error: promise.value.error
+          error: promise.value.error,
         };
       } else {
         // For rejected promises, return the result with an error
         return {
           ...result,
           content: null,
-          error: `Failed to fetch content: ${promise.reason}`
+          error: `Failed to fetch content: ${promise.reason}`,
         };
       }
     });

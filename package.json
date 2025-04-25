@@ -23,11 +23,23 @@
     "apple-mcp": "./index.ts"
   },
   "scripts": {
-    "dev": "bun run index.ts"
+    "dev": "bun run index.ts",
+    "lint": "bunx eslint .",
+    "typecheck": "bunx tsc --noEmit",
+    "format": "bunx prettier --check .",
+    "format:write": "bunx prettier --write .",
+    "pref": "bun run index.ts",
+    "check": "bunx eslint . --fix && bunx prettier --write . && bunx tsc --noEmit"
   },
   "devDependencies": {
+    "@eslint/js": "^9.25.1",
     "@types/bun": "latest",
-    "@types/node": "^22.13.4"
+    "@types/node": "^22.13.4",
+    "@typescript-eslint/parser": "^8.31.0",
+    "eslint": "^9.25.1",
+    "eslint-config-standard-with-typescript": "^43.0.1",
+    "prettier": "latest",
+    "typescript": "latest"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
@@ -38,8 +50,12 @@
     "@jxa/run": "^1.3.6",
     "@modelcontextprotocol/sdk": "^1.5.0",
     "@types/express": "^5.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.31.0",
+    "eslint-plugin": "^1.0.1",
+    "eslint-plugin-prettier": "^5.2.6",
     "mcp-proxy": "^2.4.0",
     "run-applescript": "^7.0.0",
     "zod": "^3.24.2"
-  }
+  },
+  "private": true
 }

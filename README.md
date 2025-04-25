@@ -12,7 +12,6 @@ Here's a step-by-step video about how to set this up, with a demo. - https://x.c
 
 ![image](https://github.com/user-attachments/assets/56a5ccfa-cb1a-4226-80c5-6cc794cefc34)
 
-
 <details>
 <summary>Here's the JSON to copy</summary>
 
@@ -42,7 +41,6 @@ npx -y @smithery/cli@latest install @Dhravya/apple-mcp --client claude
 ```bash
 npx -y @smithery/cli@latest install @Dhravya/apple-mcp --client cursor
 ```
-
 
 ## Features
 
@@ -74,6 +72,7 @@ npx -y @smithery/cli@latest install @Dhravya/apple-mcp --client cursor
   - Search the web using DuckDuckGo
   - Retrieve and process content from search results
 - Maps:
+
   - Search for locations and addresses
   - Save locations to favorites
   - Get directions between locations
@@ -84,12 +83,10 @@ npx -y @smithery/cli@latest install @Dhravya/apple-mcp --client cursor
 - TODO: Search and open photos in Apple Photos app
 - TODO: Search and open music in Apple Music app
 
-
 You can also daisy-chain commands to create a workflow. Like:
 "can you please read the note about people i met in the conference, find their contacts and emails, and send them a message saying thank you for the time."
 
 (it works!)
-
 
 #### Manual installation
 

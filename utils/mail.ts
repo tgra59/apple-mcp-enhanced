@@ -183,10 +183,7 @@ end tell`;
       }
 
       // If the raw result contains useful info but parsing failed
-      if (
-        asResult.includes("subject") &&
-        asResult.includes("sender")
-      ) {
+      if (asResult.includes("subject") && asResult.includes("sender")) {
         console.error("Returning raw AppleScript result for debugging");
         return [
           {
@@ -419,8 +416,7 @@ end tell`;
                 if (results.length >= limit) {
                   break;
                 }
-              } catch (queryError) {
-              }
+              } catch (queryError) {}
             } catch (boxError) {}
           }
         } catch (mbError) {}
@@ -491,7 +487,7 @@ end tell
       const result = await runAppleScript(script);
       if (result === "success") {
         return `Email sent to ${to} with subject "${subject}"`;
-      // biome-ignore lint/style/noUselessElse: <explanation>
+        // biome-ignore lint/style/noUselessElse: <explanation>
       } else {
       }
     } catch (asError) {

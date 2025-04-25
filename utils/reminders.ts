@@ -46,7 +46,7 @@ async function getAllLists(): Promise<ReminderList[]> {
  */
 async function getRemindersFromListById(
   listId: string,
-  props?: string[]
+  props?: string[],
 ): Promise<any[]> {
   return await run(
     (args: { id: string; props?: string[] }) => {
@@ -73,7 +73,7 @@ async function getRemindersFromListById(
             obj[prop] = list[prop]();
             return obj;
           },
-          {}
+          {},
         );
         const finalList = [];
 
@@ -86,7 +86,7 @@ async function getRemindersFromListById(
               obj[prop] = propFns[prop][i];
               return obj;
             },
-            {}
+            {},
           );
           finalList.push(reminder);
         }
@@ -94,7 +94,7 @@ async function getRemindersFromListById(
       }
       return main();
     },
-    { id: listId, props }
+    { id: listId, props },
   );
 }
 
@@ -195,14 +195,14 @@ async function createReminder(
   name: string,
   listName: string = "Reminders",
   notes?: string,
-  dueDate?: string
+  dueDate?: string,
 ): Promise<Reminder> {
   const result = await run(
     (
       name: string,
       listName: string,
       notes: string | undefined,
-      dueDate: string | undefined
+      dueDate: string | undefined,
     ) => {
       const Reminders = Application("Reminders");
 
@@ -253,7 +253,7 @@ async function createReminder(
     name,
     listName,
     notes,
-    dueDate
+    dueDate,
   );
 
   return result as Reminder;
