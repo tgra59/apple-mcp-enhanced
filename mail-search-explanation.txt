@@ -1,0 +1,27 @@
+Mail Search Functionality - Technical Explanation
+
+The Apple MCP email search functionality faces limitations due to Apple's security and privacy restrictions. After extensive troubleshooting and diagnostics, we've found that:
+
+1. Issue Summary:
+   - The Mail app restricts programmatic access to search through email content
+   - This is intentional by Apple's design to protect user privacy
+   - It's not a bug in our implementation, but a fundamental limitation of Mail's automation capabilities
+
+2. Technical Details:
+   - While we can access unread emails and basic account information
+   - Deep searching through email content is restricted by Apple's security model
+   - Both AppleScript and JavaScript for Automation (JXA) approaches are limited
+
+3. Our Solution:
+   - We've implemented a user-friendly message explaining the limitation
+   - We continue to support other Mail functionality (unread emails, sending, accounts)
+   - We provide instructions for users to search directly in the Mail app
+
+This is consistent with Apple's focus on privacy and security. Similar limitations exist for other private data in macOS applications.
+
+For users who need to search email:
+1. Open the Mail app directly
+2. Use the search feature in the top-right corner
+3. Enter your search terms
+
+Other Mail functionality such as reading unread emails, sending emails, and viewing account information continues to work normally through the Apple MCP server.

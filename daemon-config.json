@@ -1,0 +1,7 @@
+{
+  "updateIntervalHours": 24,
+  "autoStart": true,
+  "logLevel": "info",
+  "maxLogSize": 10485760,
+  "enabled": true
+}

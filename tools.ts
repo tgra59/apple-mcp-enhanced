@@ -54,20 +54,25 @@ const NOTES_TOOL: Tool = {
 const MESSAGES_TOOL: Tool = {
   name: "messages",
   description:
-    "Interact with Apple Messages app - send, read, schedule messages and check unread messages",
+    "Interact with Apple Messages app - send, read, schedule messages and check unread messages. Supports both phone numbers and contact names with intelligent matching.",
   inputSchema: {
     type: "object",
     properties: {
       operation: {
         type: "string",
         description:
-          "Operation to perform: 'send', 'read', 'schedule', or 'unread'",
-        enum: ["send", "read", "schedule", "unread"],
+          "Operation to perform: 'send', 'send-confirmed', 'read', 'schedule', 'unread', 'threads', or 'search-contacts'",
+        enum: ["send", "send-confirmed", "read", "schedule", "unread", "threads", "search-contacts"],
+      },
+      phoneNumberOrName: {
+        type: "string",
+        description:
+          "Phone number OR contact name to send/read messages (supports fuzzy matching for names)",
       },
       phoneNumber: {
         type: "string",
         description:
-          "Phone number to send message to (required for send, read, and schedule operations)",
+          "Phone number (legacy field - use phoneNumberOrName instead)",
       },
       message: {
         type: "string",
@@ -77,12 +82,59 @@ const MESSAGES_TOOL: Tool = {
       limit: {
         type: "number",
         description:
-          "Number of messages to read (optional, for read and unread operations)",
+          "Number of messages/threads to retrieve (optional)",
       },
       scheduledTime: {
         type: "string",
         description:
           "ISO string of when to send the message (required for schedule operation)",
+      },
+      messageType: {
+        type: "string",
+        description:
+          "Force message type (optional): 'auto' detects best type, 'imessage' forces iMessage, 'sms' forces SMS",
+        enum: ["auto", "imessage", "sms"],
+      },
+      verifyContact: {
+        type: "boolean",
+        description:
+          "Whether to verify contact exists before sending (default: true)",
+      },
+      includeContext: {
+        type: "boolean", 
+        description:
+          "Whether to include conversation context and thread info (default: true)",
+      },
+      searchTerm: {
+        type: "string",
+        description:
+          "Contact name to search for (required for search-contacts operation)",
+      },
+      confirmationToken: {
+        type: "string",
+        description:
+          "Confirmation token from send operation (required for send-confirmed operation)",
+      },
+      userConfirmation: {
+        type: "string",
+        description:
+          "User's explicit confirmation (optional for send-confirmed operation, defaults to 'yes')",
+      },
+      validatedRecipient: {
+        type: "string",
+        description:
+          "Validated recipient name or identifier (legacy - use confirmationToken instead)",
+      },
+      validatedPhoneNumber: {
+        type: "string",
+        description:
+          "Validated phone number to send to (legacy - use confirmationToken instead)",
+      },
+      validatedMessageType: {
+        type: "string",
+        description:
+          "Validated message type to use (legacy - use confirmationToken instead)",
+        enum: ["imessage", "sms", "unknown"],
       },
     },
     required: ["operation"],
@@ -99,8 +151,8 @@ const MAIL_TOOL: Tool = {
       operation: {
         type: "string",
         description:
-          "Operation to perform: 'unread', 'search', 'send', 'mailboxes', or 'accounts'",
-        enum: ["unread", "search", "send", "mailboxes", "accounts"],
+          "Operation to perform: 'unread', 'search', 'imap-search', 'setup-imap', 'list-imap-accounts', 'send', 'mailboxes', or 'accounts'",
+        enum: ["unread", "search", "imap-search", "setup-imap", "list-imap-accounts", "send", "mailboxes", "accounts"],
       },
       account: {
         type: "string",
@@ -141,6 +193,31 @@ const MAIL_TOOL: Tool = {
       bcc: {
         type: "string",
         description: "BCC email address (optional for send operation)",
+      },
+      // New properties for IMAP operations
+      imapAccount: {
+        type: "string",
+        description: "IMAP account nickname to use for search (required for imap-search operation)",
+      },
+      imapUser: {
+        type: "string",
+        description: "IMAP username/email (required for setup-imap operation)",
+      },
+      imapPassword: {
+        type: "string",
+        description: "IMAP password (required for setup-imap operation)",
+      },
+      imapHost: {
+        type: "string",
+        description: "IMAP server hostname (required for setup-imap operation)",
+      },
+      imapPort: {
+        type: "number",
+        description: "IMAP server port (default: 993 for SSL/TLS)",
+      },
+      imapTls: {
+        type: "boolean",
+        description: "Whether to use TLS for IMAP connection (default: true)",
       },
     },
     required: ["operation"],
@@ -220,15 +297,15 @@ const WEB_SEARCH_TOOL: Tool = {
 
 const CALENDAR_TOOL: Tool = {
   name: "calendar",
-  description: "Search, create, and open calendar events in Apple Calendar app",
+  description: "Search, create, list calendars, and open calendar events in Apple Calendar app with enhanced options",
   inputSchema: {
     type: "object",
     properties: {
       operation: {
         type: "string",
         description:
-          "Operation to perform: 'search', 'open', 'list', or 'create'",
-        enum: ["search", "open", "list", "create"],
+          "Operation to perform: 'search', 'open', 'list', 'create', or 'list-calendars'",
+        enum: ["search", "open", "list", "create", "list-calendars"],
       },
       searchText: {
         type: "string",
@@ -286,6 +363,12 @@ const CALENDAR_TOOL: Tool = {
         type: "string",
         description:
           "Name of the calendar to create the event in (optional for create operation, uses default calendar if not specified)",
+      },
+      eventColor: {
+        type: "string",
+        description:
+          "Color for the event (optional for create operation). Note: Apple Calendar typically uses calendar-level colors, not individual event colors. Available options: red, orange, yellow, green, blue, purple, brown, graphite",
+        enum: ["red", "orange", "yellow", "green", "blue", "purple", "brown", "graphite"],
       },
     },
     required: ["operation"],

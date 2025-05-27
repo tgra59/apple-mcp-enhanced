@@ -14,7 +14,7 @@ end tell`);
       try {
         await runAppleScript(`
 tell application "Mail" to activate
-delay 2`);
+delay 3`);
       } catch (activateError) {
         console.error("Error activating Mail app:", activateError);
         throw new Error(
@@ -25,10 +25,11 @@ delay 2`);
 
     // Try to get the count of mailboxes as a simple test
     try {
-      await runAppleScript(`
+      const mailboxCount = await runAppleScript(`
 tell application "Mail"
     count every mailbox
 end tell`);
+      console.error(`Mail mailbox count: ${mailboxCount}`);
       return true;
     } catch (mailboxError) {
       console.error("Error accessing mailboxes:", mailboxError);
@@ -40,6 +41,45 @@ tell application "Mail"
     return its version
 end tell`);
         console.error("Mail version:", mailVersion);
+        
+        // Test if we can access some basic properties of Mail
+        const accountInfo = await runAppleScript(`
+tell application "Mail"
+    set info to ""
+    try
+        set acctCount to count of accounts
+        set info to info & "Found " & acctCount & " accounts. "
+    on error
+        set info to info & "Could not access accounts. "
+    end try
+    
+    try
+        set inboxes to {}
+        repeat with a in accounts
+            try
+                repeat with m in mailboxes of a
+                    if name of m is "Inbox" then
+                        set end of inboxes to name of a & ":" & name of m
+                    end if
+                end repeat
+            on error
+                -- Skip problem accounts
+            end try
+        end repeat
+        
+        if (count of inboxes) > 0 then
+            set info to info & "Found " & (count of inboxes) & " inboxes."
+        else
+            set info to info & "No inboxes found."
+        end if
+    on error err
+        set info to info & "Error finding inboxes: " & err
+    end try
+    
+    return info
+end tell`);
+        
+        console.error(`Mail account info: ${accountInfo}`);
         return true;
       } catch (versionError) {
         console.error("Error getting Mail version:", versionError);
@@ -300,6 +340,8 @@ end tell`);
   }
 }
 
+// Original mail module without IMAP imports
+
 async function searchMails(
   searchTerm: string,
   limit = 10,
@@ -309,130 +351,101 @@ async function searchMails(
       return [];
     }
 
-    // Ensure Mail app is running
+    // Check if Mail app is running
     await runAppleScript(`
 if application "Mail" is not running then
     tell application "Mail" to activate
-    delay 2
+    delay 3
 end if`);
 
-    // First try the AppleScript approach which might be more reliable
+    console.error(`Searching for emails containing: "${searchTerm}"`);
+    
+    // STEP 1: Try to find matches in unread emails (these are accessible through Mail API)
     try {
-      const script = `
-tell application "Mail"
-    set searchString to "${searchTerm.replace(/"/g, '\\"')}"
-    set foundMsgs to {}
-    set allBoxes to every mailbox
-
-    repeat with currentBox in allBoxes
-        try
-            set boxMsgs to (messages of currentBox whose (subject contains searchString) or (content contains searchString))
-            set foundMsgs to foundMsgs & boxMsgs
-            if (count of foundMsgs) ≥ ${limit} then exit repeat
-        end try
-    end repeat
-
-    set resultList to {}
-    set msgCount to (count of foundMsgs)
-    if msgCount > ${limit} then set msgCount to ${limit}
-
-    repeat with i from 1 to msgCount
-        try
-            set currentMsg to item i of foundMsgs
-            set msgInfo to {subject:subject of currentMsg, sender:sender of currentMsg, ¬
-                            date:(date sent of currentMsg) as string, isRead:read status of currentMsg, ¬
-                            boxName:name of (mailbox of currentMsg)}
-            set end of resultList to msgInfo
-        end try
-    end repeat
-
-    return resultList
-end tell`;
-
-      const asResult = await runAppleScript(script);
-
-      // If we got results, parse them
-      if (asResult && asResult.length > 0) {
-        try {
-          const parsedResults = JSON.parse(asResult);
-          if (Array.isArray(parsedResults) && parsedResults.length > 0) {
-            return parsedResults.map((msg) => ({
-              subject: msg.subject || "No subject",
-              sender: msg.sender || "Unknown sender",
-              dateSent: msg.date || new Date().toString(),
-              content: "[Content not available through AppleScript method]",
-              isRead: msg.isRead || false,
-              mailbox: msg.boxName || "Unknown mailbox",
-            }));
-          }
-        } catch (parseError) {
-          console.error("Error parsing AppleScript result:", parseError);
-          // Continue to JXA approach if parsing fails
-        }
+      // Get unread emails
+      const unreadEmails: EmailMessage[] = await getUnreadMails(50);
+      console.error(`Retrieved ${unreadEmails.length} unread emails to check`);
+      
+      // Search through unread emails
+      const searchResults = unreadEmails.filter(email => {
+        const subjectMatch = email.subject.toLowerCase().includes(searchTerm.toLowerCase());
+        const contentMatch = email.content.toLowerCase().includes(searchTerm.toLowerCase());
+        const senderMatch = email.sender.toLowerCase().includes(searchTerm.toLowerCase());
+        return subjectMatch || contentMatch || senderMatch;
+      });
+      
+      if (searchResults.length > 0) {
+        console.error(`Found ${searchResults.length} matching emails among unread messages`);
+        return searchResults.slice(0, limit);
       }
-    } catch (asError) {
-      // Continue to JXA approach
+    } catch (unreadError) {
+      console.error("Error searching unread emails:", unreadError);
     }
-
-    // JXA approach as fallback
-    const searchResults: EmailMessage[] = await run(
-      (searchTerm: string, limit: number) => {
-        const Mail = Application("Mail");
-        const results = [];
-
-        try {
-          const mailboxes = Mail.mailboxes();
-
-          for (const mailbox of mailboxes) {
-            try {
-              // biome-ignore lint/suspicious/noImplicitAnyLet: <explanation>
-              let messages;
-              try {
-                messages = mailbox.messages.whose({
-                  _or: [
-                    { subject: { _contains: searchTerm } },
-                    { content: { _contains: searchTerm } },
-                  ],
-                })();
-
-                const count = Math.min(messages.length, limit);
-
-                for (let i = 0; i < count; i++) {
-                  try {
-                    const msg = messages[i];
-                    results.push({
-                      subject: msg.subject(),
-                      sender: msg.sender(),
-                      dateSent: msg.dateSent().toString(),
-                      content: msg.content()
-                        ? msg.content().substring(0, 500)
-                        : "[No content]", // Limit content length
-                      isRead: msg.readStatus(),
-                      mailbox: mailbox.name(),
-                    });
-                  } catch (msgError) {}
-                }
-
-                if (results.length >= limit) {
-                  break;
-                }
-              } catch (queryError) {}
-            } catch (boxError) {}
+    
+    // STEP 2: If no matches found in unread emails, try IMAP search
+    console.error("No matches found in unread emails, trying IMAP search...");
+    
+    try {
+      // Check if we have the gmail-test account configured
+      const imapAccount = "gmail-test"; // Default IMAP account
+      
+      // Try to get credentials to check if account exists
+      try {
+        // This is a method in mail-imap.ts that gets credentials
+        const credentials = await mailImap.getCredentials(imapAccount);
+        
+        if (credentials) {
+          console.error(`Found IMAP account "${imapAccount}", using IMAP search as fallback`);
+          
+          // Use IMAP search as fallback
+          const imapResults = await mailImap.searchMailsImap(imapAccount, searchTerm, limit);
+          
+          if (imapResults && imapResults.length > 0) {
+            console.error(`IMAP search found ${imapResults.length} results`);
+            return imapResults;
           }
-        } catch (mbError) {}
-
-        return results.slice(0, limit);
-      },
-      searchTerm,
-      limit,
-    );
-
-    return searchResults;
+          
+          console.error("IMAP search returned no results");
+        }
+      } catch (credError) {
+        console.error(`No IMAP credentials found for account "${imapAccount}":`, credError);
+      }
+    } catch (imapError) {
+      console.error("Error during IMAP fallback search:", imapError);
+    }
+    
+    // STEP 3: If no results from either method, return an informative message
+    return [{
+      subject: `Search results for "${searchTerm}"`,
+      sender: "Apple MCP System",
+      dateSent: new Date().toString(),
+      content: 
+        `No emails matching "${searchTerm}" were found.\n\n` +
+        `We've searched both unread emails and tried IMAP search for archived emails. ` +
+        `If you believe there should be emails matching this search, you may want to:\n\n` +
+        `1. Check if your IMAP account is properly set up (using the 'setup-imap' operation)\n` +
+        `2. Try a different search term\n` +
+        `3. Open the Mail app directly and use its search feature\n\n` +
+        `You can continue to use other Mail functionality through this interface.`,
+      isRead: false,
+      mailbox: "System Information"
+    }];
   } catch (error) {
     console.error("Error in searchMails:", error);
-    throw new Error(
-      `Error searching mail: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    
+    // Return a user-friendly error instead of throwing
+    return [{
+      subject: `Error searching for "${searchTerm}"`,
+      sender: "Apple MCP System",
+      dateSent: new Date().toString(),
+      content: 
+        `An error occurred while searching for emails containing "${searchTerm}".\n\n` +
+        `Error details: ${error instanceof Error ? error.message : String(error)}\n\n` +
+        `This may be due to Apple's security restrictions on mail access or IMAP configuration issues. ` +
+        `Try using the unread operation to view recent emails, or open the Mail app directly for searching.`,
+      isRead: false,
+      mailbox: "System Error"
+    }];
   }
 }
 

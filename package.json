@@ -29,7 +29,18 @@
     "format": "bunx prettier --check .",
     "format:write": "bunx prettier --write .",
     "pref": "bun run index.ts",
-    "check": "bunx eslint . --fix && bunx prettier --write . && bunx tsc --noEmit"
+    "check": "bunx eslint . --fix && bunx prettier --write . && bunx tsc --noEmit",
+    "cache:setup": "bun cache-manager.ts update",
+    "cache:status": "bun cache-manager.ts status",
+    "cache:update": "bun cache-manager.ts update",
+    "cache:test": "bun cache-manager.ts test",
+    "daemon:start": "bun cache-daemon.ts start",
+    "daemon:stop": "bun cache-daemon.ts stop",
+    "daemon:restart": "bun cache-daemon.ts restart",
+    "daemon:status": "bun cache-daemon.ts status",
+    "daemon:config": "bun cache-daemon.ts config",
+    "startup": "./startup-service.sh start",
+    "setup": "bun setup-cache.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.1",
@@ -53,6 +64,8 @@
     "@typescript-eslint/eslint-plugin": "^8.31.0",
     "eslint-plugin": "^1.0.1",
     "eslint-plugin-prettier": "^5.2.6",
+    "imapflow": "^1.0.186",
+    "keytar": "^7.9.0",
     "mcp-proxy": "^2.4.0",
     "run-applescript": "^7.0.0",
     "zod": "^3.24.2"

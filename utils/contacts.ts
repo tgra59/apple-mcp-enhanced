@@ -60,24 +60,123 @@ async function findNumber(name: string) {
       return [];
     }
 
-    const nums: string[] = await run((name: string) => {
+    console.error(`🔍 Fast contact search for: "${name}"`);
+    const searchStart = Date.now();
+
+    // FAST approach: Multiple targeted searches with scoring (no getAllNumbers!)
+    const searchResults = await run((searchName: string) => {
       const Contacts = Application("Contacts");
-      const people = Contacts.people.whose({ name: { _contains: name } });
-      const phones = people.length > 0 ? people[0].phones() : [];
-      return phones.map((phone: unknown) => (phone as { value: string }).value);
+      const results: Array<{ name: string; phones: string[]; score: number }> = [];
+      
+      // Strategy 1: Exact name match
+      try {
+        const exactPeople = Contacts.people.whose({ name: searchName });
+        for (const person of exactPeople) {
+          const phones = person.phones().map((phone: any) => phone.value()).filter((p: string) => p);
+          if (phones.length > 0) {
+            results.push({ name: person.name(), phones, score: 100 });
+          }
+        }
+      } catch (e) { /* ignore */ }
+      
+      // Strategy 2: First name exact match  
+      if (results.length === 0) {
+        try {
+          const firstNamePeople = Contacts.people.whose({ firstName: searchName });
+          for (const person of firstNamePeople) {
+            const phones = person.phones().map((phone: any) => phone.value()).filter((p: string) => p);
+            if (phones.length > 0) {
+              results.push({ name: person.name(), phones, score: 90 });
+            }
+          }
+        } catch (e) { /* ignore */ }
+      }
+      
+      // Strategy 3: Last name exact match
+      if (results.length === 0) {
+        try {
+          const lastNamePeople = Contacts.people.whose({ lastName: searchName });
+          for (const person of lastNamePeople) {
+            const phones = person.phones().map((phone: any) => phone.value()).filter((p: string) => p);
+            if (phones.length > 0) {
+              results.push({ name: person.name(), phones, score: 85 });
+            }
+          }
+        } catch (e) { /* ignore */ }
+      }
+      
+      // Strategy 4: Name starts with search term
+      if (results.length === 0) {
+        try {
+          const allPeople = Contacts.people();
+          let foundCount = 0;
+          for (const person of allPeople) {
+            if (foundCount >= 10) break; // Limit to first 10 to avoid performance issues
+            
+            const fullName = person.name();
+            if (fullName && fullName.toLowerCase().startsWith(searchName.toLowerCase() + " ")) {
+              const phones = person.phones().map((phone: any) => phone.value()).filter((p: string) => p);
+              if (phones.length > 0) {
+                results.push({ name: fullName, phones, score: 80 });
+                foundCount++;
+              }
+            }
+          }
+        } catch (e) { /* ignore */ }
+      }
+      
+      // Strategy 5: Limited contains search (only if no better matches)
+      if (results.length === 0) {
+        try {
+          const containsPeople = Contacts.people.whose({ name: { _contains: searchName } });
+          let processedCount = 0;
+          for (const person of containsPeople) {
+            if (processedCount >= 5) break; // Limit to 5 results max
+            
+            const phones = person.phones().map((phone: any) => phone.value()).filter((p: string) => p);
+            if (phones.length > 0) {
+              const fullName = person.name();
+              
+              // Score based on match quality
+              let score = 10; // Base score for contains
+              const lowerName = fullName.toLowerCase();
+              const lowerSearch = searchName.toLowerCase();
+              
+              if (lowerName.includes(" " + lowerSearch + " ")) score = 70; // Full word in middle
+              else if (lowerName.endsWith(" " + lowerSearch)) score = 60; // Full word at end
+              else if (lowerName.startsWith(lowerSearch)) score = 50; // Starts with
+              
+              results.push({ name: fullName, phones, score });
+              processedCount++;
+            }
+          }
+        } catch (e) { /* ignore */ }
+      }
+      
+      // Sort by score (highest first) and return
+      results.sort((a, b) => b.score - a.score);
+      return results;
+      
     }, name);
 
-    // If no numbers found, run getNumbers() to find the closest match
-    if (nums.length === 0) {
-      const allNumbers = await getAllNumbers();
-      const closestMatch = Object.keys(allNumbers).find((personName) =>
-        personName.toLowerCase().includes(name.toLowerCase()),
-      );
-      return closestMatch ? allNumbers[closestMatch] : [];
+    const searchTime = Date.now() - searchStart;
+    
+    if (searchResults.length > 0) {
+      const winner = searchResults[0];
+      console.error(`🏆 Found "${winner.name}" (score: ${winner.score}) in ${searchTime}ms`);
+      
+      if (searchResults.length > 1) {
+        console.error(`📋 Other matches: ${searchResults.slice(1).map(r => `"${r.name}" (${r.score})`).join(', ')}`);
+      }
+      
+      return winner.phones;
+    } else {
+      console.error(`❌ No contact found for "${name}" in ${searchTime}ms`);
+      return [];
     }
 
-    return nums;
   } catch (error) {
+    console.error("Error in findNumber:", error);
     throw new Error(
       `Error finding contact: ${error instanceof Error ? error.message : String(error)}`,
     );

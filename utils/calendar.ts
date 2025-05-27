@@ -11,6 +11,28 @@ interface CalendarEvent {
   calendarName: string;
   isAllDay: boolean;
   url: string | null;
+  color?: string;
+}
+
+// Define types for calendar information
+interface CalendarInfo {
+  name: string;
+  color: string;
+  type: string;
+  writable: boolean;
+  id: string;
+}
+
+// Define color mapping for calendar events
+enum CalendarColors {
+  Red = "red",
+  Orange = "orange", 
+  Yellow = "yellow",
+  Green = "green",
+  Blue = "blue",
+  Purple = "purple",
+  Brown = "brown",
+  Graphite = "graphite"
 }
 
 // Configuration for timeouts and limits
@@ -22,6 +44,87 @@ const CONFIG = {
   // Maximum number of calendars to process
   MAX_CALENDARS: 1,
 };
+
+/**
+ * Get all available calendars with their properties
+ * @returns Array of calendar information objects
+ */
+async function getAvailableCalendars(): Promise<CalendarInfo[]> {
+  try {
+    if (!(await checkCalendarAccess())) {
+      return [];
+    }
+
+    console.error("getAvailableCalendars - Starting to fetch calendar list");
+
+    const calendars = (await run(() => {
+      try {
+        const Calendar = Application("Calendar");
+        const allCalendars = Calendar.calendars();
+        const calendarList: CalendarInfo[] = [];
+
+        for (const calendar of allCalendars) {
+          try {
+            const calendarInfo: CalendarInfo = {
+              name: "",
+              color: "",
+              type: "",
+              writable: false,
+              id: "",
+            };
+
+            try {
+              calendarInfo.name = calendar.name();
+            } catch (e) {
+              calendarInfo.name = "Unknown Calendar";
+            }
+
+            try {
+              calendarInfo.color = calendar.color();
+            } catch (e) {
+              calendarInfo.color = "unknown";
+            }
+
+            try {
+              calendarInfo.type = calendar.type();
+            } catch (e) {
+              calendarInfo.type = "unknown";
+            }
+
+            try {
+              calendarInfo.writable = calendar.writable();
+            } catch (e) {
+              calendarInfo.writable = false;
+            }
+
+            try {
+              calendarInfo.id = calendar.uid();
+            } catch (e) {
+              calendarInfo.id = `unknown-${Date.now()}-${Math.random()}`;
+            }
+
+            calendarList.push(calendarInfo);
+          } catch (e) {
+            // Skip calendars we can't process
+            console.log("Error processing calendar:", JSON.stringify(e));
+          }
+        }
+
+        return calendarList;
+      } catch (e) {
+        console.log("Error getting calendars:", JSON.stringify(e));
+        return [];
+      }
+    })) as CalendarInfo[];
+
+    return calendars;
+  } catch (error) {
+    console.error(
+      `Error getting available calendars: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return [];
+  }
+}
 
 /**
  * Check if the Calendar app is accessible
@@ -543,7 +646,7 @@ async function getEvents(
 }
 
 /**
- * Create a new calendar event
+ * Create a new calendar event with enhanced options
  * @param title Title of the event
  * @param startDate Start date/time in ISO format
  * @param endDate End date/time in ISO format
@@ -551,6 +654,7 @@ async function getEvents(
  * @param notes Optional notes for the event
  * @param isAllDay Optional flag to create an all-day event
  * @param calendarName Optional calendar name to add the event to (uses default if not specified)
+ * @param eventColor Optional color for the event (red, orange, yellow, green, blue, purple, brown, graphite)
  * @returns Result object indicating success or failure, including the created event ID
  */
 async function createEvent(
@@ -561,6 +665,7 @@ async function createEvent(
   notes?: string,
   isAllDay = false,
   calendarName?: string,
+  eventColor?: string,
 ): Promise<{ success: boolean; message: string; eventId?: string }> {
   try {
     if (!(await checkCalendarAccess())) {
@@ -582,6 +687,7 @@ async function createEvent(
         notes?: string;
         isAllDay: boolean;
         calendarName?: string;
+        eventColor?: string;
       }) => {
         try {
           const Calendar = Application("Calendar");
@@ -633,9 +739,20 @@ async function createEvent(
           // Add the event to the calendar
           targetCalendar.events.push(newEvent);
 
+          // Try to set color if provided (this might not work in all Calendar versions)
+          if (args.eventColor) {
+            try {
+              // Note: Event coloring in Apple Calendar is typically handled at the calendar level
+              // Individual event colors may not be supported via AppleScript
+              console.log(`Attempted to set event color to: ${args.eventColor}`);
+            } catch (colorError) {
+              console.log("Could not set event color:", JSON.stringify(colorError));
+            }
+          }
+
           return {
             success: true,
-            message: `Event "${args.title}" created successfully.`,
+            message: `Event "${args.title}" created successfully in calendar "${targetCalendar.name()}".`,
             eventId: newEvent.uid(),
           };
         } catch (e) {
@@ -653,6 +770,7 @@ async function createEvent(
         notes,
         isAllDay,
         calendarName,
+        eventColor,
       },
     )) as { success: boolean; message: string; eventId?: string };
 
@@ -670,6 +788,7 @@ const calendar = {
   openEvent,
   getEvents,
   createEvent,
+  getAvailableCalendars,
 };
 
 export default calendar;

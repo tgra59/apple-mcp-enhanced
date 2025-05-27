@@ -22,7 +22,7 @@ console.error("Starting apple-mcp server...");
 // Placeholders for modules - will either be loaded eagerly or lazily
 let contacts: typeof import("./utils/contacts").default | null = null;
 let notes: typeof import("./utils/notes").default | null = null;
-let message: typeof import("./utils/message").default | null = null;
+let message: typeof import("./utils/message-cached").default | null = null; // FIXED: Use cached version
 let mail: typeof import("./utils/mail").default | null = null;
 let reminders: typeof import("./utils/reminders").default | null = null;
 let webSearch: typeof import("./utils/webSearch").default | null = null;
@@ -33,7 +33,7 @@ let maps: typeof import("./utils/maps").default | null = null;
 type ModuleMap = {
   contacts: typeof import("./utils/contacts").default;
   notes: typeof import("./utils/notes").default;
-  message: typeof import("./utils/message").default;
+  message: typeof import("./utils/message-cached").default; // FIXED: Use cached version
   mail: typeof import("./utils/mail").default;
   reminders: typeof import("./utils/reminders").default;
   webSearch: typeof import("./utils/webSearch").default;
@@ -66,7 +66,7 @@ async function loadModule<
         if (!notes) notes = (await import("./utils/notes")).default;
         return notes as ModuleMap[T];
       case "message":
-        if (!message) message = (await import("./utils/message")).default;
+        if (!message) message = (await import("./utils/message-cached")).default; // FIXED: Use cached version
         return message as ModuleMap[T];
       case "mail":
         if (!mail) mail = (await import("./utils/mail")).default;
@@ -125,8 +125,8 @@ async function attemptEagerLoading() {
     notes = (await import("./utils/notes")).default;
     console.error("- Notes module loaded successfully");
 
-    message = (await import("./utils/message")).default;
-    console.error("- Message module loaded successfully");
+    message = (await import("./utils/message-cached")).default; // FIXED: Use cached version
+    console.error("- Cached Message module loaded successfully");
 
     mail = (await import("./utils/mail")).default;
     console.error("- Mail module loaded successfully");
@@ -386,50 +386,142 @@ function initServer() {
 
             switch (args.operation) {
               case "send": {
-                if (!args.phoneNumber || !args.message) {
+                const phoneNumberOrName = args.phoneNumberOrName || args.phoneNumber;
+                if (!phoneNumberOrName || !args.message) {
                   throw new Error(
-                    "Phone number and message are required for send operation",
+                    "Phone number/name and message are required for send operation",
                   );
                 }
-                await messageModule.sendMessage(args.phoneNumber, args.message);
+
+                // Use the enhanced cached message system for proper confirmation
+                const result = await messageModule.sendMessageEnhanced(
+                  phoneNumberOrName,
+                  args.message,
+                  {
+                    verifyContact: args.verifyContact ?? true,
+                    messageType: args.messageType || 'auto'
+                  }
+                );
+
+                if (result.needsValidation && result.validationInfo) {
+                  // Return validation prompt to user - DO NOT PROCEED WITHOUT USER CONFIRMATION
+                  return {
+                    content: [
+                      {
+                        type: "text",
+                        text: `🛡️ MESSAGE CONFIRMATION REQUIRED - USER MUST CONFIRM BEFORE SENDING\n\n` +
+                              `📱 To: ${result.validationInfo.resolvedContact}\n` +
+                              `📞 Phone: ${result.validationInfo.phoneNumber}\n` +
+                              `💬 Message: "${result.validationInfo.messagePreview}"\n` +
+                              `📡 Type: ${result.validationInfo.messageType.toUpperCase()}\n\n` +
+                              `⚠️ STOP: Do you want to send this message? Please confirm YES or NO.\n\n` +
+                              `❌ DO NOT PROCEED automatically. Wait for explicit user confirmation.\n` +
+                              `✅ Only if user confirms, then use token: ${result.validationInfo.confirmationToken}\n\n` +
+                              `(This confirmation prevents accidental sending to wrong recipients)`
+                      },
+                    ],
+                    isError: false,
+                    requiresUserConfirmation: true,
+                    confirmationToken: result.validationInfo.confirmationToken,
+                    validationData: {
+                      recipient: result.validationInfo.resolvedContact,
+                      phoneNumber: result.validationInfo.phoneNumber,
+                      messageType: result.validationInfo.messageType,
+                      message: result.validationInfo.messagePreview
+                    }
+                  };
+                } else {
+                  return {
+                    content: [
+                      {
+                        type: "text",
+                        text: result.message,
+                      },
+                    ],
+                    isError: !result.success,
+                  };
+                }
+              }
+
+              case "send-confirmed": {
+                if (!args.confirmationToken) {
+                  throw new Error(
+                    "confirmationToken is required for send-confirmed operation. Use the 'send' operation first to get a confirmation token."
+                  );
+                }
+                
+                // Actually send the message using the confirmation token
+                const result = await messageModule.sendMessageConfirmed(
+                  args.confirmationToken,
+                  args.userConfirmation || 'yes'
+                );
+
                 return {
                   content: [
                     {
                       type: "text",
-                      text: `Message sent to ${args.phoneNumber}`,
+                      text: result.success 
+                        ? result.message
+                        : `❌ Failed to send message: ${result.message}`,
                     },
                   ],
-                  isError: false,
+                  isError: !result.success,
                 };
               }
 
               case "read": {
-                if (!args.phoneNumber) {
+                const phoneNumberOrName = args.phoneNumberOrName || args.phoneNumber;
+                if (!phoneNumberOrName) {
                   throw new Error(
-                    "Phone number is required for read operation",
+                    "Phone number or contact name is required for read operation",
                   );
                 }
-                const messages = await messageModule.readMessages(
-                  args.phoneNumber,
-                  args.limit,
+
+                // Use enhanced read with caching and contact resolution
+                const result = await messageModule.readMessagesEnhanced(
+                  phoneNumberOrName,
+                  args.limit || 10,
+                  args.includeContext ?? true
                 );
-                return {
-                  content: [
-                    {
-                      type: "text",
-                      text:
-                        messages.length > 0
-                          ? messages
-                              .map(
-                                (msg) =>
-                                  `[${new Date(msg.date).toLocaleString()}] ${msg.is_from_me ? "Me" : msg.sender}: ${msg.content}`,
-                              )
-                              .join("\n")
-                          : "No messages found",
-                    },
-                  ],
-                  isError: false,
-                };
+
+                if (result.success && result.messages.length > 0) {
+                  let responseText = `Found ${result.messages.length} message(s)`;
+                  if (result.contactName) {
+                    responseText += ` for ${result.contactName}`;
+                  }
+                  if (result.threadInfo) {
+                    responseText += ` (${result.threadInfo.unreadCount} unread)`;
+                  }
+                  responseText += ":\n\n";
+
+                  responseText += result.messages
+                    .map((msg) => {
+                      const displaySender = msg.is_from_me ? "Me" : (result.contactName || msg.sender);
+                      const messageType = msg.messageType ? `[${msg.messageType.toUpperCase()}]` : '';
+                      return `[${new Date(msg.date).toLocaleString()}] ${displaySender} ${messageType}: ${msg.content}`;
+                    })
+                    .join("\n");
+
+                  return {
+                    content: [
+                      {
+                        type: "text",
+                        text: responseText,
+                      },
+                    ],
+                    isError: false,
+                  };
+                } else {
+                  return {
+                    content: [
+                      {
+                        type: "text",
+                        text: `No messages found for "${phoneNumberOrName}"`,
+                      },
+                    ],
+                    isError: false,
+                  };
+                }
               }
 
               case "schedule": {
@@ -497,6 +589,84 @@ function initServer() {
                   ],
                   isError: false,
                 };
+              }
+
+              case "threads": {
+                // Get message threads using enhanced functionality
+                const threads = await messageModule.getMessageThreads(args.limit || 20);
+
+                if (threads.length > 0) {
+                  const responseText = `Found ${threads.length} conversation thread(s):\n\n` +
+                    threads
+                      .map((thread) => 
+                        `📱 ${thread.contactName}\n` +
+                        `   Phone: ${thread.phoneNumber}\n` +
+                        `   Last: ${new Date(thread.lastMessageDate).toLocaleString()}\n` +
+                        `   Unread: ${thread.unreadCount}\n` +
+                        `   ${thread.isGroup ? 'Group Chat' : 'Direct Message'}`
+                      )
+                      .join("\n\n");
+
+                  return {
+                    content: [
+                      {
+                        type: "text",
+                        text: responseText,
+                      },
+                    ],
+                    isError: false,
+                  };
+                } else {
+                  return {
+                    content: [
+                      {
+                        type: "text",
+                        text: "No conversation threads found",
+                      },
+                    ],
+                    isError: false,
+                  };
+                }
+              }
+
+              case "search-contacts": {
+                if (!args.searchTerm) {
+                  throw new Error("searchTerm is required for search-contacts operation");
+                }
+
+                // Use enhanced contact search
+                const matches = await messageModule.findBestContactMatches(args.searchTerm, args.limit || 5);
+
+                if (matches.length > 0) {
+                  const responseText = `Found ${matches.length} contact(s) matching "${args.searchTerm}":\n\n` +
+                    matches
+                      .map((contact) => 
+                        `📱 ${contact.name} (score: ${contact.matchScore})\n` +
+                        `   📞 ${contact.phoneNumbers.join(', ')}\n` +
+                        (contact.emails && contact.emails.length > 0 ? `   📧 ${contact.emails.join(', ')}\n` : '')
+                      )
+                      .join("\n");
+
+                  return {
+                    content: [
+                      {
+                        type: "text",
+                        text: responseText,
+                      },
+                    ],
+                    isError: false,
+                  };
+                } else {
+                  return {
+                    content: [
+                      {
+                        type: "text",
+                        text: `No contacts found matching "${args.searchTerm}"`,
+                      },
+                    ],
+                    isError: false,
+                  };
+                }
               }
 
               default:
@@ -1072,6 +1242,31 @@ end tell`;
                 };
               }
 
+              case "list-calendars": {
+                const calendars = await calendarModule.getAvailableCalendars();
+                return {
+                  content: [
+                    {
+                      type: "text",
+                      text:
+                        calendars.length > 0
+                          ? `Found ${calendars.length} calendar(s):\n\n${calendars
+                              .map(
+                                (cal) =>
+                                  `📅 ${cal.name}\n` +
+                                  `   Color: ${cal.color}\n` +
+                                  `   Type: ${cal.type}\n` +
+                                  `   Writable: ${cal.writable ? "Yes" : "No"}\n` +
+                                  `   ID: ${cal.id}`,
+                              )
+                              .join("\n\n")}`
+                          : "No calendars found. Please check Calendar app permissions.",
+                    },
+                  ],
+                  isError: false,
+                };
+              }
+
               default:
                 throw new Error(`Unknown calendar operation: ${operation}`);
             }
@@ -1373,19 +1568,29 @@ function isNotesArgs(args: unknown): args is {
 }
 
 function isMessagesArgs(args: unknown): args is {
-  operation: "send" | "read" | "schedule" | "unread";
+  operation: "send" | "send-confirmed" | "read" | "schedule" | "unread" | "threads" | "search-contacts";
   phoneNumber?: string;
+  phoneNumberOrName?: string;
   message?: string;
   limit?: number;
   scheduledTime?: string;
+  messageType?: 'auto' | 'imessage' | 'sms';
+  verifyContact?: boolean;
+  includeContext?: boolean;
+  searchTerm?: string;
+  confirmationToken?: string;
+  userConfirmation?: string;
+  validatedRecipient?: string;
+  validatedPhoneNumber?: string;
+  validatedMessageType?: 'imessage' | 'sms' | 'unknown';
 } {
   if (typeof args !== "object" || args === null) return false;
 
-  const { operation, phoneNumber, message, limit, scheduledTime } = args as any;
+  const { operation, phoneNumber, phoneNumberOrName, message, limit, scheduledTime, searchTerm, confirmationToken, validatedPhoneNumber, validatedRecipient } = args as any;
 
   if (
     !operation ||
-    !["send", "read", "schedule", "unread"].includes(operation)
+    !["send", "send-confirmed", "read", "schedule", "unread", "threads", "search-contacts"].includes(operation)
   ) {
     return false;
   }
@@ -1393,23 +1598,36 @@ function isMessagesArgs(args: unknown): args is {
   // Validate required fields based on operation
   switch (operation) {
     case "send":
+      if ((!phoneNumber && !phoneNumberOrName) || !message) return false;
+      break;
+    case "send-confirmed":
+      // New token-based system requires confirmationToken
+      if (!confirmationToken || typeof confirmationToken !== "string") return false;
+      break;
     case "schedule":
-      if (!phoneNumber || !message) return false;
-      if (operation === "schedule" && !scheduledTime) return false;
+      if ((!phoneNumber && !phoneNumberOrName) || !message || !scheduledTime) return false;
       break;
     case "read":
-      if (!phoneNumber) return false;
+      if (!phoneNumber && !phoneNumberOrName) return false;
+      break;
+    case "search-contacts":
+      if (!searchTerm || typeof searchTerm !== "string") return false;
       break;
     case "unread":
+    case "threads":
       // No additional required fields
       break;
   }
 
   // Validate field types if present
   if (phoneNumber && typeof phoneNumber !== "string") return false;
+  if (phoneNumberOrName && typeof phoneNumberOrName !== "string") return false;
   if (message && typeof message !== "string") return false;
   if (limit && typeof limit !== "number") return false;
   if (scheduledTime && typeof scheduledTime !== "string") return false;
+  if (confirmationToken && typeof confirmationToken !== "string") return false;
+  if (validatedPhoneNumber && typeof validatedPhoneNumber !== "string") return false;
+  if (validatedRecipient && typeof validatedRecipient !== "string") return false;
 
   return true;
 }
@@ -1541,7 +1759,7 @@ function isWebSearchArgs(args: unknown): args is WebSearchArgs {
 }
 
 function isCalendarArgs(args: unknown): args is {
-  operation: "search" | "open" | "list" | "create";
+  operation: "search" | "open" | "list" | "create" | "list-calendars";
   searchText?: string;
   eventId?: string;
   limit?: number;
@@ -1564,7 +1782,7 @@ function isCalendarArgs(args: unknown): args is {
     return false;
   }
 
-  if (!["search", "open", "list", "create"].includes(operation)) {
+  if (!["search", "open", "list", "create", "list-calendars"].includes(operation)) {
     return false;
   }
 
