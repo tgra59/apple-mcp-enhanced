@@ -149,7 +149,7 @@ end tell`;
       let recipientName: string | undefined;
       
       // Step 1: Fast contact resolution using cache
-      const isPhoneNumber = /^\\+?[0-9\\s\\-\\(\\)\\.]+$/.test(phoneNumberOrName);
+      const isPhoneNumber = /^\+?[0-9\s\-\(\)\.]+$/.test(phoneNumberOrName);
       
       if (!isPhoneNumber) {
         console.error(`🔍 Searching for contact in cache: ${phoneNumberOrName}`);
@@ -372,7 +372,7 @@ end tell`;
       let targetPhoneNumber = phoneNumberOrName;
       let contactName: string | undefined;
       
-      const isPhoneNumber = /^\\+?[0-9\\s\\-\\(\\)\\.]+$/.test(phoneNumberOrName);
+      const isPhoneNumber = /^\+?[0-9\s\-\(\)\.]+$/.test(phoneNumberOrName);
       
       if (!isPhoneNumber) {
         const matches = await this.findBestContactMatches(phoneNumberOrName, 1);
@@ -476,19 +476,26 @@ end tell`;
   private normalizePhoneNumber(phone: string): string[] {
     if (!phone || typeof phone !== 'string') return [];
     
+    // Remove all non-numeric characters except +
     const cleaned = phone.replace(/[^0-9+]/g, "");
-    if (cleaned.length < 10) return [];
-
+    
+    // Handle various formats
     const formats = new Set<string>();
 
-    if (/^\\+1\\d{10}$/.test(cleaned)) {
+    if (cleaned.length === 10) {
+      // US number without country code: 3236568914
+      formats.add(`+1${cleaned}`);
       formats.add(cleaned);
-      formats.add(cleaned.substring(2));
-    } else if (/^1\\d{10}$/.test(cleaned)) {
+    } else if (cleaned.length === 11 && cleaned.startsWith('1')) {
+      // US number with country code: 13236568914
       formats.add(`+${cleaned}`);
       formats.add(cleaned.substring(1));
-    } else if (/^\\d{10}$/.test(cleaned)) {
-      formats.add(`+1${cleaned}`);
+    } else if (cleaned.startsWith('+1') && cleaned.length === 12) {
+      // International format: +13236568914
+      formats.add(cleaned);
+      formats.add(cleaned.substring(2));
+    } else if (cleaned.startsWith('+') && cleaned.length > 10) {
+      // Other international formats
       formats.add(cleaned);
     }
 
