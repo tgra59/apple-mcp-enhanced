@@ -1,0 +1,78 @@
+{
+  "name": "apple-mcp-enhanced",
+  "version": "0.3.0",
+  "module": "index.ts",
+  "type": "module",
+  "description": "Enhanced Apple MCP server for Mac native app control through Claude - messaging, contacts, notes, mail, calendar integration with advanced caching and contact search",
+  "author": "Tommy Graham (Enhanced from Dhravya Shah's original)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tgra59/apple-mcp-enhanced.git"
+  },
+  "keywords": [
+    "mcp",
+    "apple",
+    "contacts",
+    "notes",
+    "messages",
+    "mail",
+    "calendar",
+    "claude",
+    "messaging",
+    "cache",
+    "enhanced"
+  ],
+  "bin": {
+    "apple-mcp-enhanced": "./index.ts"
+  },
+  "scripts": {
+    "dev": "bun run index.ts",
+    "lint": "bunx eslint .",
+    "typecheck": "bunx tsc --noEmit",
+    "format": "bunx prettier --check .",
+    "format:write": "bunx prettier --write .",
+    "pref": "bun run index.ts",
+    "check": "bunx eslint . --fix && bunx prettier --write . && bunx tsc --noEmit",
+    "cache:setup": "bun cache-manager.ts update",
+    "cache:status": "bun cache-manager.ts status",
+    "cache:update": "bun cache-manager.ts update",
+    "cache:test": "bun cache-manager.ts test",
+    "daemon:start": "bun cache-daemon.ts start",
+    "daemon:stop": "bun cache-daemon.ts stop",
+    "daemon:restart": "bun cache-daemon.ts restart",
+    "daemon:status": "bun cache-daemon.ts status",
+    "daemon:config": "bun cache-daemon.ts config",
+    "startup": "./startup-service.sh start",
+    "setup": "bun setup-cache.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.1",
+    "@types/bun": "latest",
+    "@types/node": "^22.13.4",
+    "@typescript-eslint/parser": "^8.31.0",
+    "eslint": "^9.25.1",
+    "eslint-config-standard-with-typescript": "^43.0.1",
+    "prettier": "latest",
+    "typescript": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.8",
+    "@jxa/global-type": "^1.3.6",
+    "@jxa/run": "^1.3.6",
+    "@modelcontextprotocol/sdk": "^1.5.0",
+    "@types/express": "^5.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.31.0",
+    "eslint-plugin": "^1.0.1",
+    "eslint-plugin-prettier": "^5.2.6",
+    "imapflow": "^1.0.186",
+    "keytar": "^7.9.0",
+    "mcp-proxy": "^2.4.0",
+    "run-applescript": "^7.0.0",
+    "zod": "^3.24.2"
+  },
+  "private": true
+}
