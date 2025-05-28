@@ -1,26 +1,32 @@
 {
-  "name": "apple-mcp",
-  "version": "0.2.7",
+  "name": "apple-mcp-enhanced",
+  "version": "1.0.0",
   "module": "index.ts",
   "type": "module",
-  "description": "Apple MCP tools for contacts, notes, messages, and mail integration",
-  "author": "Dhravya Shah",
+  "description": "Enhanced Apple MCP server with advanced contact caching, international phone support, and comprehensive macOS app integration",
+  "author": "Apple MCP Enhanced",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dhravya/apple-mcp.git"
+    "url": "private"
   },
   "keywords": [
     "mcp",
     "apple",
     "contacts",
-    "notes",
     "messages",
+    "international-phone",
+    "cache",
+    "macos",
+    "claude",
+    "notes",
     "mail",
-    "claude"
+    "calendar",
+    "reminders",
+    "maps"
   ],
   "bin": {
-    "apple-mcp": "./index.ts"
+    "apple-mcp-enhanced": "./index.ts"
   },
   "scripts": {
     "dev": "bun run index.ts",

@@ -495,7 +495,7 @@ end tell`;
     console.log(`🔧 DEBUG: Normalizing phone number: "${phone}"`);
     
     // Remove all non-digit characters except + (handles parentheses, dashes, spaces, dots)
-    // This regex is more robust and handles (323) 656-8914 format specifically
+    // This handles formats like (323) 656-8914, +33 1 23 45 67 89, +44 20 1234 5678, etc.
     const cleaned = phone.replace(/[^\d+]/g, "");
     
     console.log(`🔧 DEBUG: Cleaned phone number: "${cleaned}"`);
@@ -503,28 +503,44 @@ end tell`;
     // Handle various formats
     const formats = new Set<string>();
 
-    if (cleaned.length === 10) {
+    // Case 1: Already has international prefix (+)
+    if (cleaned.startsWith('+')) {
+      // International number with + prefix (e.g., +33123456789, +44201234567, +13236568914)
+      formats.add(cleaned);
+      
+      // For US numbers (+1), also add without country code
+      if (cleaned.startsWith('+1') && cleaned.length === 12) {
+        formats.add(cleaned.substring(2)); // Remove +1 for US compatibility
+      }
+      
+      console.log(`🌍 DEBUG: International number detected: ${cleaned}`);
+      
+    } else if (cleaned.length === 10) {
       // US number without country code: 3236568914
       formats.add(`+1${cleaned}`);
       formats.add(cleaned);
+      console.log(`🇺🇸 DEBUG: US 10-digit number detected: ${cleaned}`);
+      
     } else if (cleaned.length === 11 && cleaned.startsWith('1')) {
       // US number with country code: 13236568914
       formats.add(`+${cleaned}`);
       formats.add(cleaned.substring(1));
-    } else if (cleaned.startsWith('+1') && cleaned.length === 12) {
-      // International format: +13236568914
+      console.log(`🇺🇸 DEBUG: US 11-digit number detected: ${cleaned}`);
+      
+    } else if (cleaned.length >= 7 && cleaned.length <= 15) {
+      // International number without + prefix - could be many countries
+      // Add as-is for flexibility, but don't assume US (+1)
       formats.add(cleaned);
-      formats.add(cleaned.substring(2));
-    } else if (cleaned.startsWith('+') && cleaned.length > 10) {
-      // Other international formats
-      formats.add(cleaned);
+      
+      // Try adding + prefix for international format
+      formats.add(`+${cleaned}`);
+      
+      console.log(`🌍 DEBUG: Possible international number (no +): ${cleaned}`);
+      
     } else if (cleaned.length > 0) {
-      // Fallback: add the cleaned number as-is if it has any digits
+      // Fallback: any remaining digits - add as-is  
       formats.add(cleaned);
-      // Also try adding +1 prefix if it's not already there
-      if (!cleaned.startsWith('+') && !cleaned.startsWith('1')) {
-        formats.add(`+1${cleaned}`);
-      }
+      console.log(`⚠️ DEBUG: Unusual format, adding as-is: ${cleaned}`);
     }
 
     const result = Array.from(formats);
