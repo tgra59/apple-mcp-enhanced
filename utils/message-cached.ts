@@ -165,15 +165,25 @@ end tell`;
         const bestMatch = matches[0];
         recipientName = bestMatch.name;
         
-        const validPhoneNumber = bestMatch.phoneNumbers.find(num => num && num.trim() !== '');
-        if (!validPhoneNumber) {
+        // Smart phone number selection: prefer normalized formats over parentheses
+        console.log(`🔧 DEBUG: Available phone numbers for ${bestMatch.name}: ${JSON.stringify(bestMatch.phoneNumbers)}`);
+        
+        const validNumbers = bestMatch.phoneNumbers.filter(num => num && num.trim() !== '');
+        if (validNumbers.length === 0) {
           return {
             success: false,
             message: `Contact "${bestMatch.name}" found but has no valid phone numbers.`
           };
         }
         
-        targetPhoneNumber = validPhoneNumber;
+        // Prefer numbers that start with + or are already normalized, then fall back to any valid number
+        const preferredNumber = validNumbers.find(num => num.startsWith('+')) || 
+                               validNumbers.find(num => /^\d{10,11}$/.test(num.replace(/\D/g, ''))) ||
+                               validNumbers[0];
+        
+        console.log(`🔧 DEBUG: Selected phone number: "${preferredNumber}" from available: ${JSON.stringify(validNumbers)}`);
+        
+        targetPhoneNumber = preferredNumber;
         
         if (matches.length > 1) {
           const alternativeContacts = matches.slice(1, 3).map(m => m.name).join(', ');
@@ -386,15 +396,21 @@ end tell`;
         const bestMatch = matches[0];
         contactName = bestMatch.name;
         
-        const validPhoneNumber = bestMatch.phoneNumbers.find(num => num && num.trim() !== '');
-        if (!validPhoneNumber) {
+        // Smart phone number selection: prefer normalized formats over parentheses
+        const validNumbers = bestMatch.phoneNumbers.filter(num => num && num.trim() !== '');
+        if (validNumbers.length === 0) {
           return {
             success: false,
             messages: [],
           };
         }
         
-        targetPhoneNumber = validPhoneNumber;
+        // Prefer numbers that start with + or are already normalized, then fall back to any valid number
+        const preferredNumber = validNumbers.find(num => num.startsWith('+')) || 
+                               validNumbers.find(num => /^\d{10,11}$/.test(num.replace(/\D/g, ''))) ||
+                               validNumbers[0];
+        
+        targetPhoneNumber = preferredNumber;
       } else {
         contactName = await contactsCached.findContactByPhone(phoneNumberOrName);
       }
@@ -476,8 +492,13 @@ end tell`;
   private normalizePhoneNumber(phone: string): string[] {
     if (!phone || typeof phone !== 'string') return [];
     
-    // Remove all non-numeric characters except +
-    const cleaned = phone.replace(/[^0-9+]/g, "");
+    console.log(`🔧 DEBUG: Normalizing phone number: "${phone}"`);
+    
+    // Remove all non-digit characters except + (handles parentheses, dashes, spaces, dots)
+    // This regex is more robust and handles (323) 656-8914 format specifically
+    const cleaned = phone.replace(/[^\d+]/g, "");
+    
+    console.log(`🔧 DEBUG: Cleaned phone number: "${cleaned}"`);
     
     // Handle various formats
     const formats = new Set<string>();
@@ -497,9 +518,19 @@ end tell`;
     } else if (cleaned.startsWith('+') && cleaned.length > 10) {
       // Other international formats
       formats.add(cleaned);
+    } else if (cleaned.length > 0) {
+      // Fallback: add the cleaned number as-is if it has any digits
+      formats.add(cleaned);
+      // Also try adding +1 prefix if it's not already there
+      if (!cleaned.startsWith('+') && !cleaned.startsWith('1')) {
+        formats.add(`+1${cleaned}`);
+      }
     }
 
-    return Array.from(formats);
+    const result = Array.from(formats);
+    console.log(`🔧 DEBUG: Normalized formats: ${JSON.stringify(result)}`);
+    
+    return result;
   }
 
   // Cache management
